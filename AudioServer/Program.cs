@@ -188,7 +188,7 @@ Console.WriteLine("Ctrl+C to quit");
 Console.WriteLine();
 Console.WriteLine("Tired of being ripped off for basic software that should be free?");
 Console.WriteLine("Send donations to help fund ad-free/subs-free software for great justice.");
-Console.WriteLine("Send Bitcoin: bc1qxq4n6x3safp6wglz76gdy93zhpfcw9af29cv3g");
+Console.WriteLine("Send Bitcoin: bc1qrazvpeu7ppvre8jvyrf6p80lfhf8xv9xptmx8u");
 Console.WriteLine();
 
 while (true)

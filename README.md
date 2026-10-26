@@ -106,7 +106,7 @@ donations to help fund ad-free/subs-free software for great justice.
 
 Send Bitcoin:
 
-[`bc1qxq4n6x3safp6wglz76gdy93zhpfcw9af29cv3g`](bitcoin:bc1qxq4n6x3safp6wglz76gdy93zhpfcw9af29cv3g)
+[`bc1qrazvpeu7ppvre8jvyrf6p80lfhf8xv9xptmx8u`](bitcoin:bc1qrazvpeu7ppvre8jvyrf6p80lfhf8xv9xptmx8u)
 
 ## License
 
