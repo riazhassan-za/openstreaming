@@ -73,6 +73,19 @@ dotnet publish AudioServer -c Release -o dist
 
 This produces a single `dist\AudioServer.exe`.
 
+### Releasing
+
+Push a `v*` tag on a commit in `main`:
+
+```
+git tag v0.2.0
+git push origin v0.2.0
+```
+
+The [release workflow](.github/workflows/release.yml) builds the exe, publishes
+a GitHub Release with `AudioServer.exe` and `SHA256SUMS.txt`, and generates
+notes from the commits since the previous tag.
+
 ## Limitations
 
 - **Plain HTTP.** The password stops casual access but is sent base64-encoded,

@@ -1,0 +1,66 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  # Keep action code immutable; the comments identify the tags these commits
+  # were resolved from. Review and update the SHA when upgrading an action.
+  release:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      # Full history so the tag can be proved to descend from main below.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+
+      - name: Refuse to publish a tag that is not on main
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --quiet origin main
+          if ! git merge-base --is-ancestor HEAD origin/main; then
+            echo "::error::$GITHUB_REF_NAME points at a commit that is not contained in main."
+            exit 1
+          fi
+
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Build single-file executable
+        run: dotnet publish AudioServer -c Release -o dist
+
+      # No smoke test: the runner has no audio output device, so the server
+      # cannot start capturing there.
+
+      - name: Publish checksums alongside the binary
+        shell: bash
+        run: |
+          cd dist
+          sha256sum AudioServer.exe | tee SHA256SUMS.txt
+
+      - name: Create the release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          cat > notes.md <<'EOF'
+          ### Download
+
+          `AudioServer.exe` is a single file with the .NET runtime bundled.
+          Nothing to install.
+
+          Requires **64-bit Windows 10 or 11**. Verify your download against
+          `SHA256SUMS.txt`.
+
+          The build is unsigned, so SmartScreen will warn on first run.
+          EOF
+          gh release create "$GITHUB_REF_NAME" dist/AudioServer.exe dist/SHA256SUMS.txt \
+            --title "$GITHUB_REF_NAME" --notes-file notes.md --generate-notes
