@@ -1,12 +1,13 @@
 ﻿// Captures whatever is playing on the default output device (WASAPI loopback)
-// and serves it as an endless 16-bit PCM WAV stream at http://<host>:<port>/
-using System.Buffers.Binary;
+// and serves it as an endless Ogg Opus stream at http://<host>:<port>/
 using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Sockets;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading.Channels;
+using Concentus;
+using Concentus.Enums;
 using NAudio.Wave;
 
 // Optional: AudioServer.exe --port <n>  (default 9000)
@@ -17,6 +18,18 @@ if (portArg >= 0)
     if (portArg + 1 >= args.Length || !int.TryParse(args[portArg + 1], out port) || port < 1 || port > 65535)
     {
         Console.Error.WriteLine("--port needs a number from 1 to 65535.");
+        return 1;
+    }
+}
+
+// Optional: AudioServer.exe --bitrate <kbps>  (default 160)
+int bitrate = 160;
+int brArg = Array.IndexOf(args, "--bitrate");
+if (brArg >= 0)
+{
+    if (brArg + 1 >= args.Length || !int.TryParse(args[brArg + 1], out bitrate) || bitrate < 6 || bitrate > 510)
+    {
+        Console.Error.WriteLine("--bitrate needs a number of kbps from 6 to 510.");
         return 1;
     }
 }
@@ -37,17 +50,62 @@ if (src.BitsPerSample != 32)
 
 int inChannels = src.Channels;
 const int outChannels = 2;
-const int outBlockAlign = outChannels * 2;
 const float Mix = 0.707f; // -3 dB for center and surround channels
-var clients = new ConcurrentDictionary<Channel<byte[]>, byte>();
+const int OpusRate = 48000;
+const int FrameSamples = 960; // 20 ms at 48 kHz
+const int FramesPerPage = 5;  // 100 ms of audio per Ogg page keeps container overhead low
+var clients = new ConcurrentDictionary<Channel<byte[][]>, byte>();
 long lastDataTick = Environment.TickCount64;
 
-static short ToPcm16(float v) => (short)(Math.Clamp(v, -1f, 1f) * short.MaxValue);
+// Managed Opus only, so the exe never picks up whatever opus.dll happens to be on the machine
+OpusCodecFactory.AttemptToUseNativeLibrary = false;
+var encoder = OpusCodecFactory.CreateEncoder(OpusRate, outChannels, OpusApplication.OPUS_APPLICATION_AUDIO);
+encoder.Bitrate = bitrate * 1000;
+int preSkip = encoder.Lookahead;
+var resampler = src.SampleRate == OpusRate
+    ? null
+    : ResamplerFactory.CreateResampler(outChannels, src.SampleRate, OpusRate, 10);
+var pcm48 = new List<float>();
+var packets = new List<byte[]>(FramesPerPage);
+var packetBuffer = new byte[1275]; // largest possible Opus packet
+var encodeLock = new object();
 
-void Broadcast(byte[] pcm)
+void Broadcast(byte[][] page)
 {
     foreach (var ch in clients.Keys)
-        ch.Writer.TryWrite(pcm);
+        ch.Writer.TryWrite(page);
+}
+
+// Called from the capture thread and the silence timer, hence the lock.
+void Encode(float[] stereo, int frames)
+{
+    lock (encodeLock)
+    {
+        if (resampler == null)
+        {
+            pcm48.AddRange(stereo.AsSpan(0, frames * outChannels));
+        }
+        else
+        {
+            var resampled = new float[(frames * OpusRate / src.SampleRate + 16) * outChannels];
+            int inLen = frames, outLen = resampled.Length / outChannels;
+            resampler.ProcessInterleaved(stereo.AsSpan(0, frames * outChannels), ref inLen, resampled, ref outLen);
+            pcm48.AddRange(resampled.AsSpan(0, outLen * outChannels));
+        }
+
+        while (pcm48.Count >= FrameSamples * outChannels)
+        {
+            var frame = CollectionsMarshal.AsSpan(pcm48)[..(FrameSamples * outChannels)];
+            int len = encoder.Encode(frame, FrameSamples, packetBuffer, packetBuffer.Length);
+            pcm48.RemoveRange(0, FrameSamples * outChannels);
+            packets.Add(packetBuffer[..len]);
+            if (packets.Count == FramesPerPage)
+            {
+                Broadcast(packets.ToArray());
+                packets.Clear();
+            }
+        }
+    }
 }
 
 capture.DataAvailable += (_, e) =>
@@ -56,7 +114,7 @@ capture.DataAvailable += (_, e) =>
     // FL FR FC LFE then surround pairs (left on even index, right on odd). LFE is dropped.
     int frames = e.BytesRecorded / (4 * inChannels);
     var input = MemoryMarshal.Cast<byte, float>(e.Buffer.AsSpan(0, frames * 4 * inChannels));
-    var pcm = new byte[frames * outBlockAlign];
+    var stereo = new float[frames * outChannels];
     for (int f = 0; f < frames; f++)
     {
         var s = input.Slice(f * inChannels, inChannels);
@@ -66,11 +124,11 @@ capture.DataAvailable += (_, e) =>
         {
             if (c % 2 == 0) l += Mix * s[c]; else r += Mix * s[c];
         }
-        BinaryPrimitives.WriteInt16LittleEndian(pcm.AsSpan(f * 4), ToPcm16(l));
-        BinaryPrimitives.WriteInt16LittleEndian(pcm.AsSpan(f * 4 + 2), ToPcm16(r));
+        stereo[f * 2] = l;
+        stereo[f * 2 + 1] = r;
     }
     Interlocked.Exchange(ref lastDataTick, Environment.TickCount64);
-    Broadcast(pcm);
+    Encode(stereo, frames);
 };
 
 capture.RecordingStopped += (_, e) =>
@@ -91,28 +149,12 @@ _ = Task.Run(async () =>
         long elapsed = now - prev;
         prev = now;
         if (now - Interlocked.Read(ref lastDataTick) > 100)
-            Broadcast(new byte[outBlockAlign * (int)(src.SampleRate * elapsed / 1000)]);
+        {
+            int frames = (int)(src.SampleRate * elapsed / 1000);
+            Encode(new float[frames * outChannels], frames);
+        }
     }
 });
-
-byte[] WavHeader()
-{
-    var h = new byte[44];
-    var s = h.AsSpan();
-    Encoding.ASCII.GetBytes("RIFF").CopyTo(s);
-    BinaryPrimitives.WriteUInt32LittleEndian(s[4..], uint.MaxValue);
-    Encoding.ASCII.GetBytes("WAVEfmt ").CopyTo(s[8..]);
-    BinaryPrimitives.WriteInt32LittleEndian(s[16..], 16);
-    BinaryPrimitives.WriteInt16LittleEndian(s[20..], 1); // PCM
-    BinaryPrimitives.WriteInt16LittleEndian(s[22..], (short)outChannels);
-    BinaryPrimitives.WriteInt32LittleEndian(s[24..], src.SampleRate);
-    BinaryPrimitives.WriteInt32LittleEndian(s[28..], src.SampleRate * outBlockAlign);
-    BinaryPrimitives.WriteInt16LittleEndian(s[32..], (short)outBlockAlign);
-    BinaryPrimitives.WriteInt16LittleEndian(s[34..], 16);
-    Encoding.ASCII.GetBytes("data").CopyTo(s[36..]);
-    BinaryPrimitives.WriteUInt32LittleEndian(s[40..], uint.MaxValue);
-    return h;
-}
 
 bool Authorized(string? auth)
 {
@@ -163,11 +205,12 @@ async Task Serve(TcpClient tcp)
     }
 
     await stream.WriteAsync(Encoding.ASCII.GetBytes(
-        "HTTP/1.1 200 OK\r\nContent-Type: audio/wav\r\nCache-Control: no-cache\r\nConnection: close\r\n\r\n"));
-    await stream.WriteAsync(WavHeader());
+        "HTTP/1.1 200 OK\r\nContent-Type: audio/ogg\r\nCache-Control: no-cache\r\nConnection: close\r\n\r\n"));
+    var ogg = new OggOpusStream(Random.Shared.Next(), preSkip, src.SampleRate, outChannels);
+    await stream.WriteAsync(ogg.Headers());
 
-    // ~1s of buffered chunks; a slow client loses its oldest audio instead of blocking capture
-    var ch = Channel.CreateBounded<byte[]>(new BoundedChannelOptions(100)
+    // ~1s of buffered pages; a slow client loses its oldest audio instead of blocking capture
+    var ch = Channel.CreateBounded<byte[][]>(new BoundedChannelOptions(10)
     {
         FullMode = BoundedChannelFullMode.DropOldest,
         SingleReader = true,
@@ -176,8 +219,8 @@ async Task Serve(TcpClient tcp)
     Console.WriteLine($"Client connected: {remote}");
     try
     {
-        await foreach (var chunk in ch.Reader.ReadAllAsync())
-            await stream.WriteAsync(chunk);
+        await foreach (var page in ch.Reader.ReadAllAsync())
+            await stream.WriteAsync(ogg.AudioPage(page, FrameSamples));
     }
     catch (IOException) { }
     finally
@@ -198,7 +241,7 @@ catch (SocketException ex) when (ex.SocketErrorCode == SocketError.AddressAlread
     return 1;
 }
 capture.StartRecording();
-Console.WriteLine($"Capturing {src.SampleRate} Hz, {inChannels} ch -> 16-bit stereo PCM");
+Console.WriteLine($"Capturing {src.SampleRate} Hz, {inChannels} ch -> Opus {bitrate} kbps stereo");
 foreach (var ip in Dns.GetHostAddresses(Dns.GetHostName()).Where(a => a.AddressFamily == AddressFamily.InterNetwork))
     Console.WriteLine($"Streaming at http://{ip}:{port}/");
 Console.WriteLine(password == null ? "No password set (open to the LAN)" : "Password required (any username)");

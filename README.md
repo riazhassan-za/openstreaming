@@ -16,10 +16,17 @@ called WASAPI loopback and has been built in since Vista. AudioServer:
 
 1. captures the default output device with WASAPI loopback (via
    [NAudio](https://github.com/naudio/NAudio)),
-2. mixes it down to 16-bit stereo PCM (the center and surround channels at −3 dB,
-   the LFE channel dropped),
-3. serves it on port 9000 (or the one you choose) as an endless WAV stream over
-   plain HTTP.
+2. mixes it down to stereo (the center and surround channels at −3 dB, the LFE
+   channel dropped),
+3. encodes it as Opus at 160 kbps (via
+   [Concentus](https://github.com/lostromb/concentus), a pure C# Opus port, so
+   there's no native DLL),
+4. serves it on port 9000 (or the one you choose) as an endless Ogg Opus stream
+   over plain HTTP.
+
+At 160 kbps, Opus is generally indistinguishable from the original in blind
+listening tests. That's about a ninth of the 1,411 kbps uncompressed CD-quality
+audio would take, and silence costs about 4 kbps.
 
 While nothing is playing, Windows sends no audio. AudioServer sends silence in
 the gaps so VLC doesn't stall. Each client has its own buffer of about 1 second,
@@ -58,6 +65,7 @@ with `SHA256SUMS.txt` on the same release:
 AudioServer.exe                       # open to the LAN
 AudioServer.exe --password s3cret     # require a password
 AudioServer.exe --port 8080           # listen on another port (default 9000)
+AudioServer.exe --bitrate 192         # Opus bitrate in kbps, 6-510 (default 160)
 ```
 
 The options can be combined, e.g. `AudioServer.exe --port 8080 --password s3cret`.
@@ -118,8 +126,12 @@ notes from the commits since the previous tag.
 
 - **Plain HTTP.** The password stops casual access but is sent base64-encoded,
   not encrypted. Use it only on a network you trust.
-- **Uncompressed audio.** About 1.4 Mbps at 44.1 kHz, which is fine on a home
-  network.
+- **Lossy audio.** Opus at 160 kbps sounds the same as the original to most
+  listeners but isn't bit-exact. If the source is already lossy (YouTube,
+  Spotify), raising `--bitrate` to 192 or more leaves more headroom for the
+  second encode.
+- **About 100 ms of extra delay.** Opus packets are sent in 100 ms Ogg pages,
+  on top of VLC's own buffer.
 - **Default device only.** Changing the default output device or unplugging
   headphones stops the capture and the program exits.
 - **Echo on the same PC.** If VLC plays the stream on the PC being captured,
@@ -138,4 +150,4 @@ Send Bitcoin:
 
 ## License
 
-[GPL-3.0](LICENSE). NAudio is MIT-licensed.
+[GPL-3.0](LICENSE). NAudio is MIT-licensed; Concentus is BSD-licensed.
