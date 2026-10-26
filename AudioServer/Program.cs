@@ -1,5 +1,5 @@
 ﻿// Captures whatever is playing on the default output device (WASAPI loopback)
-// and serves it as an endless 16-bit PCM WAV stream at http://<host>:<port>/stream
+// and serves it as an endless 16-bit PCM WAV stream at http://<host>:<port>/
 using System.Buffers.Binary;
 using System.Collections.Concurrent;
 using System.Net;
@@ -148,7 +148,8 @@ async Task Serve(TcpClient tcp)
     }
 
     var parts = requestLine.Split(' ');
-    if (parts.Length < 2 || parts[1] != "/stream")
+    // "/" is the stream; "/stream" still works for URLs saved from v0.1.x
+    if (parts.Length < 2 || (parts[1] != "/" && parts[1] != "/stream"))
     {
         await stream.WriteAsync(Encoding.ASCII.GetBytes(
             "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"));
@@ -200,7 +201,7 @@ catch (SocketException ex) when (ex.SocketErrorCode == SocketError.AddressAlread
 capture.StartRecording();
 Console.WriteLine($"Capturing {src.SampleRate} Hz, {inChannels} ch -> 16-bit stereo PCM");
 foreach (var ip in Dns.GetHostAddresses(Dns.GetHostName()).Where(a => a.AddressFamily == AddressFamily.InterNetwork))
-    Console.WriteLine($"Streaming at http://{ip}:{port}/stream");
+    Console.WriteLine($"Streaming at http://{ip}:{port}/");
 Console.WriteLine(password == null ? "No password set (open to the LAN)" : "Password required (any username)");
 Console.WriteLine("Ctrl+C to quit");
 Console.WriteLine();

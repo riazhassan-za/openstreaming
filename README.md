@@ -6,7 +6,7 @@ network. No drivers, no installer, no admin rights.**
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 [![Platform: Windows x64](https://img.shields.io/badge/platform-Windows%20x64-0078D6.svg)](#requirements)
 
-Run `AudioServer.exe` and open `http://<pc-ip>:9000/stream` in VLC on a phone,
+Run `AudioServer.exe` and open `http://<pc-ip>:9000/` in VLC on a phone,
 laptop or another PC. You'll hear what the PC's speakers are playing.
 
 ## How it works
@@ -67,11 +67,14 @@ The console prints the stream URL for each of the PC's IPv4 addresses.
 In VLC, choose **Media → Open Network Stream** and enter:
 
 ```
-http://192.168.0.104:9000/stream
+http://192.168.0.104:9000/
 ```
 
+`http://192.168.0.104:9000/stream` also works, so URLs saved from earlier
+versions keep playing.
+
 With a password set, VLC shows a login box. Any username works. To skip the
-box, put the password in the URL: `http://any:s3cret@192.168.0.104:9000/stream`.
+box, put the password in the URL: `http://any:s3cret@192.168.0.104:9000/`.
 
 For lower latency, start VLC with `--network-caching=200` (the default buffer is
 about 1 s).
