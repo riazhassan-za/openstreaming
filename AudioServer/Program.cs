@@ -148,8 +148,7 @@ async Task Serve(TcpClient tcp)
     }
 
     var parts = requestLine.Split(' ');
-    // "/" is the stream; "/stream" still works for URLs saved from v0.1.x
-    if (parts.Length < 2 || (parts[1] != "/" && parts[1] != "/stream"))
+    if (parts.Length < 2 || parts[1] != "/")
     {
         await stream.WriteAsync(Encoding.ASCII.GetBytes(
             "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"));
