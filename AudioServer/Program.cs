@@ -22,6 +22,19 @@ if (portArg >= 0)
     }
 }
 
+// Optional: AudioServer.exe --bind <ipv4>  (default 0.0.0.0, every interface)
+var bindAddress = IPAddress.Any;
+int bindArg = Array.IndexOf(args, "--bind");
+if (bindArg >= 0)
+{
+    if (bindArg + 1 >= args.Length || !IPAddress.TryParse(args[bindArg + 1], out bindAddress)
+        || bindAddress.AddressFamily != AddressFamily.InterNetwork)
+    {
+        Console.Error.WriteLine("--bind needs an IPv4 address, e.g. 127.0.0.1.");
+        return 1;
+    }
+}
+
 // Optional: AudioServer.exe --bitrate <kbps>  (default 160)
 int bitrate = 160;
 int brArg = Array.IndexOf(args, "--bitrate");
@@ -230,7 +243,7 @@ async Task Serve(TcpClient tcp)
     }
 }
 
-var listener = new TcpListener(IPAddress.Any, port);
+var listener = new TcpListener(bindAddress, port);
 try
 {
     listener.Start();
@@ -240,9 +253,17 @@ catch (SocketException ex) when (ex.SocketErrorCode == SocketError.AddressAlread
     Console.Error.WriteLine($"Port {port} is already in use. Pick another with --port <n>.");
     return 1;
 }
+catch (SocketException ex) when (ex.SocketErrorCode == SocketError.AddressNotAvailable)
+{
+    Console.Error.WriteLine($"{bindAddress} isn't an address of this PC.");
+    return 1;
+}
 capture.StartRecording();
 Console.WriteLine($"Capturing {src.SampleRate} Hz, {inChannels} ch -> Opus {bitrate} kbps stereo");
-foreach (var ip in Dns.GetHostAddresses(Dns.GetHostName()).Where(a => a.AddressFamily == AddressFamily.InterNetwork))
+var urlAddresses = bindAddress.Equals(IPAddress.Any)
+    ? Dns.GetHostAddresses(Dns.GetHostName()).Where(a => a.AddressFamily == AddressFamily.InterNetwork)
+    : [bindAddress];
+foreach (var ip in urlAddresses)
     Console.WriteLine($"Streaming at http://{ip}:{port}/");
 Console.WriteLine(password == null ? "No password set (open to the LAN)" : "Password required (any username)");
 Console.WriteLine("Ctrl+C to quit");

@@ -66,7 +66,16 @@ AudioServer.exe                       # open to the LAN
 AudioServer.exe --password s3cret     # require a password
 AudioServer.exe --port 8080           # listen on another port (default 9000)
 AudioServer.exe --bitrate 192         # Opus bitrate in kbps, 6-510 (default 160)
+AudioServer.exe --bind 127.0.0.1      # this PC only (default 0.0.0.0, every interface)
 ```
+
+`--bind` takes an IPv4 address of this PC. `127.0.0.1` keeps the stream on
+this machine, so nothing else on the network can reach it and Windows doesn't
+ask about the firewall. A LAN address such as `192.168.0.104` serves only that
+network, which helps on a PC with a VPN or several adapters.
+
+`localhost` works too. Windows tries IPv6 `::1` first, and VLC falls back to
+`127.0.0.1` straight away.
 
 The options can be combined, e.g. `AudioServer.exe --port 8080 --password s3cret`.
 
