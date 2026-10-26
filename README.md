@@ -28,6 +28,30 @@ so a slow client loses its oldest audio instead of holding up the others.
 The HTTP server is written on a raw TCP socket rather than `HttpListener`. That
 is why it can listen on the network without an admin `netsh urlacl` entry.
 
+## Download
+
+Download `AudioServer.exe` from the
+[latest release](https://github.com/riazhassan-za/openstreaming/releases/latest).
+It's a single file with the .NET runtime bundled, for 64-bit Windows 10 or 11.
+Nothing to install.
+
+### Windows SmartScreen warning
+
+The exe is unsigned, so the first time you run it Windows shows
+**"Windows protected your PC"**. To run it anyway:
+
+1. Click **More info**.
+2. Click **Run anyway**.
+
+Windows remembers the choice for that file, so this only happens once.
+
+To check the download is the one the release workflow built, compare its hash
+with `SHA256SUMS.txt` on the same release:
+
+```powershell
+(Get-FileHash .\AudioServer.exe -Algorithm SHA256).Hash.ToLower()
+```
+
 ## Usage
 
 ```
