@@ -1,0 +1,91 @@
+# OpenStreaming for Windows
+
+**Streams whatever your Windows PC is playing to VLC on any device on your
+network. No drivers, no installer, no admin rights.**
+
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
+[![Platform: Windows x64](https://img.shields.io/badge/platform-Windows%20x64-0078D6.svg)](#requirements)
+
+Run `AudioServer.exe` and open `http://<pc-ip>:9000/stream` in VLC on a phone,
+laptop or another PC. You'll hear what the PC's speakers are playing.
+
+## How it works
+
+Windows can already record whatever plays on an output device. The feature is
+called WASAPI loopback and has been built in since Vista. AudioServer:
+
+1. captures the default output device with WASAPI loopback (via
+   [NAudio](https://github.com/naudio/NAudio)),
+2. mixes it down to 16-bit stereo PCM (the center and surround channels at −3 dB,
+   the LFE channel dropped),
+3. serves it on port 9000 as an endless WAV stream over plain HTTP.
+
+While nothing is playing, Windows sends no audio. AudioServer sends silence in
+the gaps so VLC doesn't stall. Each client has its own buffer of about 1 second,
+so a slow client loses its oldest audio instead of holding up the others.
+
+The HTTP server is written on a raw TCP socket rather than `HttpListener`. That
+is why it can listen on the network without an admin `netsh urlacl` entry.
+
+## Usage
+
+```
+AudioServer.exe                       # open to the LAN
+AudioServer.exe --password s3cret     # require a password
+```
+
+The console prints the stream URL for each of the PC's IPv4 addresses.
+
+In VLC, choose **Media → Open Network Stream** and enter:
+
+```
+http://192.168.0.104:9000/stream
+```
+
+With a password set, VLC shows a login box. Any username works. To skip the
+box, put the password in the URL: `http://any:s3cret@192.168.0.104:9000/stream`.
+
+For lower latency, start VLC with `--network-caching=200` (the default buffer is
+about 1 s).
+
+### Firewall
+
+The first time it runs, Windows asks whether to allow AudioServer on the
+network. Allow it on **Private networks**. If you missed the prompt, run this
+in an admin PowerShell:
+
+```powershell
+New-NetFirewallRule -DisplayName "AudioServer 9000" -Direction Inbound -Protocol TCP -LocalPort 9000 -Action Allow -Profile Private
+```
+
+## Requirements
+
+- Windows 10 or 11, x64.
+- Nothing else. The release exe is self-contained and includes the .NET runtime.
+
+## Building
+
+Requires the [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0).
+
+```
+dotnet publish AudioServer -c Release -o dist
+```
+
+This produces a single `dist\AudioServer.exe`.
+
+## Limitations
+
+- **Plain HTTP.** The password stops casual access but is sent base64-encoded,
+  not encrypted. Use it only on a network you trust.
+- **Uncompressed audio.** About 1.4 Mbps at 44.1 kHz, which is fine on a home
+  network.
+- **Default device only.** Changing the default output device or unplugging
+  headphones stops the capture and the program exits.
+- **Echo on the same PC.** If VLC plays the stream on the PC being captured,
+  through the same output device, the audio loops back into the stream.
+- **Downmix clipping.** Loud true-surround content can distort when mixed down
+  to stereo. Ordinary stereo sources are unaffected.
+
+## License
+
+[GPL-3.0](LICENSE). NAudio is MIT-licensed.

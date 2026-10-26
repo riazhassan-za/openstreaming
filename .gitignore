@@ -1,0 +1,11 @@
+# .NET build output
+bin/
+obj/
+dist/
+
+# Editors / OS
+.vs/
+.vscode/
+.idea/
+*.user
+Thumbs.db
