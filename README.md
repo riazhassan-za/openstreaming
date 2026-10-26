@@ -99,6 +99,15 @@ notes from the commits since the previous tag.
 - **Downmix clipping.** Loud true-surround content can distort when mixed down
   to stereo. Ordinary stereo sources are unaffected.
 
+## Donate
+
+Tired of being ripped off for basic software that should be free? Send
+donations to help fund ad-free/subs-free software for great justice.
+
+Send Bitcoin:
+
+[`bc1qxq4n6x3safp6wglz76gdy93zhpfcw9af29cv3g`](bitcoin:bc1qxq4n6x3safp6wglz76gdy93zhpfcw9af29cv3g)
+
 ## License
 
 [GPL-3.0](LICENSE). NAudio is MIT-licensed.

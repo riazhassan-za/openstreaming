@@ -185,6 +185,11 @@ foreach (var ip in Dns.GetHostAddresses(Dns.GetHostName()).Where(a => a.AddressF
     Console.WriteLine($"Streaming at http://{ip}:{Port}/stream");
 Console.WriteLine(password == null ? "No password set (open to the LAN)" : "Password required (any username)");
 Console.WriteLine("Ctrl+C to quit");
+Console.WriteLine();
+Console.WriteLine("Tired of being ripped off for basic software that should be free?");
+Console.WriteLine("Send donations to help fund ad-free/subs-free software for great justice.");
+Console.WriteLine("Send Bitcoin: bc1qxq4n6x3safp6wglz76gdy93zhpfcw9af29cv3g");
+Console.WriteLine();
 
 while (true)
 {
