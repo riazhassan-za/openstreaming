@@ -18,7 +18,8 @@ called WASAPI loopback and has been built in since Vista. AudioServer:
    [NAudio](https://github.com/naudio/NAudio)),
 2. mixes it down to 16-bit stereo PCM (the center and surround channels at −3 dB,
    the LFE channel dropped),
-3. serves it on port 9000 as an endless WAV stream over plain HTTP.
+3. serves it on port 9000 (or the one you choose) as an endless WAV stream over
+   plain HTTP.
 
 While nothing is playing, Windows sends no audio. AudioServer sends silence in
 the gaps so VLC doesn't stall. Each client has its own buffer of about 1 second,
@@ -32,7 +33,10 @@ is why it can listen on the network without an admin `netsh urlacl` entry.
 ```
 AudioServer.exe                       # open to the LAN
 AudioServer.exe --password s3cret     # require a password
+AudioServer.exe --port 8080           # listen on another port (default 9000)
 ```
+
+The options can be combined, e.g. `AudioServer.exe --port 8080 --password s3cret`.
 
 The console prints the stream URL for each of the PC's IPv4 addresses.
 
@@ -52,7 +56,7 @@ about 1 s).
 
 The first time it runs, Windows asks whether to allow AudioServer on the
 network. Allow it on **Private networks**. If you missed the prompt, run this
-in an admin PowerShell:
+in an admin PowerShell (change `9000` if you use `--port`):
 
 ```powershell
 New-NetFirewallRule -DisplayName "AudioServer 9000" -Direction Inbound -Protocol TCP -LocalPort 9000 -Action Allow -Profile Private

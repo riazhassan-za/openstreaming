@@ -1,5 +1,5 @@
 ﻿// Captures whatever is playing on the default output device (WASAPI loopback)
-// and serves it as an endless 16-bit PCM WAV stream at http://<host>:9000/stream
+// and serves it as an endless 16-bit PCM WAV stream at http://<host>:<port>/stream
 using System.Buffers.Binary;
 using System.Collections.Concurrent;
 using System.Net;
@@ -9,7 +9,17 @@ using System.Text;
 using System.Threading.Channels;
 using NAudio.Wave;
 
-const int Port = 9000;
+// Optional: AudioServer.exe --port <n>  (default 9000)
+int port = 9000;
+int portArg = Array.IndexOf(args, "--port");
+if (portArg >= 0)
+{
+    if (portArg + 1 >= args.Length || !int.TryParse(args[portArg + 1], out port) || port < 1 || port > 65535)
+    {
+        Console.Error.WriteLine("--port needs a number from 1 to 65535.");
+        return 1;
+    }
+}
 
 // Optional: AudioServer.exe --password <secret>  (HTTP Basic auth, any username)
 string? password = null;
@@ -177,12 +187,20 @@ async Task Serve(TcpClient tcp)
     }
 }
 
-var listener = new TcpListener(IPAddress.Any, Port);
-listener.Start();
+var listener = new TcpListener(IPAddress.Any, port);
+try
+{
+    listener.Start();
+}
+catch (SocketException ex) when (ex.SocketErrorCode == SocketError.AddressAlreadyInUse)
+{
+    Console.Error.WriteLine($"Port {port} is already in use. Pick another with --port <n>.");
+    return 1;
+}
 capture.StartRecording();
 Console.WriteLine($"Capturing {src.SampleRate} Hz, {inChannels} ch -> 16-bit stereo PCM");
 foreach (var ip in Dns.GetHostAddresses(Dns.GetHostName()).Where(a => a.AddressFamily == AddressFamily.InterNetwork))
-    Console.WriteLine($"Streaming at http://{ip}:{Port}/stream");
+    Console.WriteLine($"Streaming at http://{ip}:{port}/stream");
 Console.WriteLine(password == null ? "No password set (open to the LAN)" : "Password required (any username)");
 Console.WriteLine("Ctrl+C to quit");
 Console.WriteLine();
